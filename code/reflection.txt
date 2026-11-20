@@ -1,8 +1,41 @@
-Write your reflection here.
+1. What I learned 
+    I learned that every website needs its own scraping technique. Lakeshore’s cards could be reached 
+with query_selector_all and the ~ sibling selector, which starts from the <h2> heading and finds the 
+div.menu-grid after it. Hilltop’s menu was HTML tables, so pd.read_html read the whole menu in one 
+line, and melt turned the S/M/L columns into one row per size. Canal Street was the hardest because 
+nothing is in the HTML until JavaScript draws it. I had to select_option the shop, click “Show full 
+menu”, and then wait_for_selector, because query_selector_all doesn’t wait and just returns an empty 
+list with no error. I also learned to collect every href before visiting the item pages, because leaving the 
+page throws the cards away.
 
-See reflection.md for what makes a good reflection — be specific, use the
-terminology from this assignment (HTML element, CSS selector, class and id
-selectors, sibling selector, inner_text, attribute, headless browser, waiting for
-JavaScript, crawling, pagination, read_html, melt, fuzzy matching, normalization,
-threshold, human in the loop, merge indicator, gap analysis), and make it
-actionable.
+    The biggest idea for me was keeping a human in the loop for fuzzy matching. fuzz.token_sort_ratio 
+    measures spelling, not meaning: “Matcha Latte” scores 87 against “Mocha Latte” but is a different drink, 
+    while “PSL” scores 18 against “Pumpkin Spice Latte” and is the same one. So no single threshold can be 
+    right. The code auto-matches at 90+, asks the owner about the rest, and saves her answers so they always 
+    win. I saw this when my first pass through the Review page went over 12 decisions. When an early answer 
+    like Avocado Toast isn’t marked as a new item, later items can’t auto-match to it, and more questions 
+    show up. The analysis is only as good as the matching: two wrong answers change “above the market” from 
+    10 to 13.
+
+2. Where I struggled
+    Most of my problems were environment and syntax rather than logic. I got an IndentationError in scrapers.py 
+    that broke even the cleaning tests, because every test imports the whole rivals package. Now I know that a 
+    collection error means the package can’t import, not that my function is wrong. I also hit a Playwright 
+    error (“Executable doesn’t exist”) because the Python package version didn’t match the browser installed 
+    in the container, and fixed it with playwright install chromium.
+
+
+3. What I still need to practice 
+    In particular I still want to work on 
+    1. match_items. The way the pool of names grows as items get matched is the part I understand least. I’ll 
+    trace it by hand for Lakeshore’s and Canal’s Matcha Latte.
+    2. gap_analysis. I’d like to rewrite the groupby(...).agg(...) with named aggregations and the outer merge 
+    with indicator=True without looking, and explain why _merge needs .astype(str) before relabelling.
+    3. Waiting on JavaScript pages. I’ll practice choosing between wait_for_selector and wait_for_function 
+    on a different dynamic site.
+
+4. What I'll do differently for last lab
+For the last lab I want to continue working on using parts that I have learned from all of the previous labs this
+semester assignments_01-07 to help me complete the last one. I have a feeling that we will be doing something 
+similar to this because it will be the last lab, but my goal is to review the other assignments before I begin 
+working on assignment_08 so that I will have everything I need to prove all that I have learned this semester. 
