@@ -36,8 +36,11 @@ def add_canonical(menus: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
     that (`cafe`, `item`) — missing for items the owner has not reviewed yet.
     Every row of `menus` is kept, in order; `menus` itself is not changed.
     """
-    # TODO: your code here
-    pass
+    names = matches[["cafe", "item", "matched_to"]]
+    names = names.drop_duplicates(subset=["cafe", "item"])
+    out = menus.merge(names, on=["cafe", "item"], how="left")
+    out["canonical"] = out["matched_to"].where(out["cafe"] != OUR_CAFE, out["item"])
+    return out.drop(columns="matched_to")
 
 
 def price_table(menus: pd.DataFrame) -> pd.DataFrame:
@@ -69,8 +72,15 @@ def price_position(ours: float, low: float, average: float, high: float) -> str:
 
     Check them in that order: with one rival, low, average and high are the same.
     """
-    # TODO: your code here
-    pass
+    if ours < low:
+        return BELOW_ALL
+    if ours > high:
+        return ABOVE_ALL
+    if ours < average:
+        return BELOW_AVERAGE
+    if ours > average:
+        return ABOVE_AVERAGE
+    return AT_AVERAGE
 
 
 def compare_prices(prices: pd.DataFrame) -> pd.DataFrame:
@@ -92,8 +102,24 @@ def compare_prices(prices: pd.DataFrame) -> pd.DataFrame:
 
     Plain index.
     """
-    # TODO: your code here
-    pass
+    rival_cols = [col for col in prices.columns if col != OUR_CAFE]
+    table = prices.reset_index().rename(columns={OUR_CAFE: "our_price"})
+    table = table[["canonical", "size", "our_price"] + rival_cols]
+    table.columns.name = None
+
+    rival_prices = table[rival_cols]
+    keep = table["our_price"].notna() & rival_prices.notna().any(axis=1)
+    table = table[keep].reset_index(drop=True)
+    rival_prices = table[rival_cols]
+
+    low = rival_prices.min(axis=1)
+    high = rival_prices.max(axis=1)
+    table["rival_avg"] = rival_prices.mean(axis=1).round(2)
+    table["our_position"] = [
+        price_position(ours, lo, avg, hi)
+        for ours, lo, avg, hi in zip(table["our_price"], low, table["rival_avg"], high)
+    ]
+    return table
 
 
 def gap_analysis(menus: pd.DataFrame) -> pd.DataFrame:
@@ -112,5 +138,25 @@ def gap_analysis(menus: pd.DataFrame) -> pd.DataFrame:
     Sorted by `where` ("only them" first, then "only us", then "both"), then
     `rivals` (most first), then `canonical`; plain index.
     """
-    # TODO: your code here
-    pass
+    named = menus.dropna(subset=["canonical"])
+    ours = named[named["cafe"] == OUR_CAFE][["canonical", "kind"]].drop_duplicates()
+    theirs = named[named["cafe"] != OUR_CAFE]
+
+    sellers = (theirs.groupby(["canonical", "kind"])["cafe"]
+               .agg(rivals="nunique",
+                    sold_by=lambda cafes: ", ".join(sorted(set(cafes))))
+               .reset_index())
+
+    gaps = pd.merge(ours, sellers, on=["canonical", "kind"], how="outer",
+                    indicator=True)
+    labels = {"left_only": "only us", "right_only": "only them", "both": "both"}
+    gaps["where"] = gaps["_merge"].astype(str).map(labels)
+    gaps["rivals"] = gaps["rivals"].fillna(0).astype(int)
+    gaps["sold_by"] = gaps["sold_by"].fillna("")
+
+    order = {"only them": 0, "only us": 1, "both": 2}
+    gaps["order"] = gaps["where"].map(order)
+    gaps = gaps.sort_values(["order", "rivals", "canonical"],
+                            ascending=[True, False, True])
+    columns = ["canonical", "kind", "where", "rivals", "sold_by"]
+    return gaps[columns].reset_index(drop=True)
